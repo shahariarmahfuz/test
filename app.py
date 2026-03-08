@@ -90,6 +90,7 @@ def monitor_process(proc, task_id, phase, folder_path, file_prefix=None):
 # ব্যাকগ্রাউন্ড এনকোডিং ওয়ার্কার
 # ==========================================
 def worker():
+    # সিস্টেম রিস্টার্ট হলে ডাটাবেজ থেকে অসম্পূর্ণ কাজগুলো কিউতে যুক্ত করা
     pending_tasks = db_query("SELECT id FROM tasks WHERE type='encode' AND (status LIKE '%ওয়েটিং%' OR status LIKE '%লাইভের কারণে%') ORDER BY id ASC")
     if pending_tasks:
         for pt in pending_tasks: task_queue.put(pt['id'])
@@ -97,6 +98,7 @@ def worker():
     while True:
         task_id = task_queue.get()
         
+        # লাইভ চললে এনকোড ওয়েটিং থাকবে (সার্ভার সেফটির জন্য)
         while len(active_live_streams) > 0:
             db_execute("UPDATE tasks SET status='লাইভের কারণে অপেক্ষায়...' WHERE id=?", (task_id,))
             time.sleep(5)
@@ -123,7 +125,8 @@ def worker():
             add_activity(f"'{project_name}' প্রজেক্টের কাজ শুরু হয়েছে।", "info")
             
             with open(log_file, "w") as log_f:
-                proc1 = subprocess.Popen(f"gdown --fuzzy '{link}'", shell=True, cwd=task_download_dir, stderr=log_f)
+                # FIX: gdown error solved by using python3 -m gdown
+                proc1 = subprocess.Popen(f"python3 -m gdown --fuzzy '{link}'", shell=True, cwd=task_download_dir, stderr=log_f)
                 active_processes[task_id] = proc1
                 monitor_process(proc1, task_id, "download", task_download_dir)
             
@@ -199,11 +202,13 @@ def live_stream_worker(project_name, stream_key, concat_file_path, auto_delete=F
         if project_name in active_live_streams: del active_live_streams[project_name]
         if os.path.exists(concat_file_path): os.remove(concat_file_path)
         
+        # অটো-ডিলিট লজিক (লাইভ শেষে)
         if auto_delete:
             shutil.rmtree(f"projects/{project_name}", ignore_errors=True)
             db_execute("DELETE FROM tasks WHERE project=?", (project_name,))
             add_activity(f"লাইভ শেষে '{project_name}' অটোমেটিকভাবে ডিলিট করা হয়েছে 🗑️।", "warning")
 
+# ডেটাবেজ ও ওয়ার্কার ইনিশিয়ালাইজেশন
 init_db()
 threading.Thread(target=worker, daemon=True).start()
 
@@ -272,6 +277,7 @@ def live_page():
                 threading.Thread(target=live_stream_worker, args=(project, stream_key, concat_file, auto_delete), daemon=True).start()
                 return redirect(url_for("live_page"))
 
+    # প্রগ্রেস ক্যালকুলেশন
     for p, info in active_live_streams.items():
         if info.get("total_duration") and info["status"] == "লাইভ চলছে...":
             elapsed = time.time() - info["start_time"]
@@ -304,7 +310,7 @@ def manage_page():
             if action == "delete":
                 shutil.rmtree(f"projects/{project}", ignore_errors=True)
                 db_execute("DELETE FROM tasks WHERE project=?", (project,))
-                add_activity(f"'{project}' প্রজেক্টটি ডিলিট করা হয়েছে।", "warning")
+                add_activity(f"'{project}' প্রজেক্টটি ম্যানুয়ালি ডিলিট করা হয়েছে।", "warning")
                 msg = f"'{project}' প্রজেক্টটি সফলভাবে ডিলিট হয়েছে।"
             elif action == "rename":
                 new_name = request.form.get("new_name")
@@ -390,6 +396,5 @@ def cancel_live(project_name):
 if __name__ == "__main__":
     os.makedirs("projects", exist_ok=True)
     os.makedirs("logs", exist_ok=True)
-    # Railway বা Docker এর জন্য পোর্ট সেটআপ
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)

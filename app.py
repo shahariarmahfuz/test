@@ -4,6 +4,7 @@ import os, threading, time, subprocess, shutil, datetime, sqlite3, queue, sys
 app = Flask(__name__)
 DB_LOCK = threading.Lock()
 
+# মেমোরি ভেরিয়েবল
 active_processes = {} 
 active_live_streams = {} 
 MAX_LIVE_STREAMS = 3
@@ -122,9 +123,7 @@ def worker():
             add_activity(f"'{project_name}' প্রজেক্টের কাজ শুরু হয়েছে।", "info")
             
             with open(log_file, "w") as log_f:
-                # =======================================================
-                # THE MAGIC FIX: টার্মিনাল বাইপাস করে সরাসরি পাইথন API কল
-                # =======================================================
+                # Direct Python API call for gdown
                 download_script = f"import gdown\ngdown.download('{link}', fuzzy=True)"
                 proc1 = subprocess.Popen([sys.executable, "-c", download_script], cwd=task_download_dir, stdout=log_f, stderr=log_f)
                 
@@ -138,10 +137,16 @@ def worker():
                 db_execute("UPDATE tasks SET status='ফেইল হয়েছে' WHERE id=?", (task_id,))
                 add_activity(f"'{project_name}' ডাউনলোড ফেইল হয়েছে!", "danger")
             else:
-                latest = max(files, key=lambda x: os.path.getctime(os.path.join(task_download_dir, x)))
-                input_file = os.path.join(task_download_dir, latest)
-                safe_name = latest.replace(' ', '_').replace('.', '_')
-                output_pattern = os.path.join(encoded_dir, f"{safe_name}_part%03d.flv")
+                # নতুন সমাধান: ফাইল রিনেম করে স্পেশাল ক্যারেক্টার রিমুভ করা
+                downloaded_file = max(files, key=lambda x: os.path.getctime(os.path.join(task_download_dir, x)))
+                raw_input_path = os.path.join(task_download_dir, downloaded_file)
+                
+                ext = os.path.splitext(downloaded_file)[1] if os.path.splitext(downloaded_file)[1] else ".mp4"
+                safe_input_name = "input_video" + ext
+                input_file = os.path.join(task_download_dir, safe_input_name)
+                
+                os.rename(raw_input_path, input_file)
+                output_pattern = os.path.join(encoded_dir, "part%03d.flv")
                 
                 codec = check_video_codec(input_file)
                 if codec == "h264":
@@ -156,9 +161,7 @@ def worker():
                 with open(log_file, "a") as log_f:
                     proc2 = subprocess.Popen(cmd2, shell=True, stderr=log_f)
                     active_processes[task_id] = proc2
-                    monitor_process(proc2, task_id, "encode", encoded_dir, safe_name)
-                
-                if db_query("SELECT cancel_req FROM tasks WHERE id=?", (task_id,), one=True)['cancel_req'] == 1: raise Exception("Canceled")
+                    monitor_process(proc2, task_id, "encode", encoded_dir, "part")
                     
                 shutil.rmtree(task_download_dir, ignore_errors=True)
                 db_execute("UPDATE tasks SET status='কমপ্লিট হয়েছে', progress=? WHERE id=?", (f"১০০% প্রস্তুত ({applied_mode})", task_id))
@@ -212,7 +215,7 @@ init_db()
 threading.Thread(target=worker, daemon=True).start()
 
 # ==========================================
-# ফ্লাস্ক রাউটস (Pages & APIs)
+# ফ্লাস্ক রাউটস
 # ==========================================
 @app.route("/", methods=["GET", "POST"])
 def home():
@@ -272,7 +275,7 @@ def live_page():
                     "process": None, "status": "শুরু হচ্ছে...", 
                     "start_time": time.time(), "total_duration": total_duration_sec
                 }
-                add_activity(f"'{project}' এর লাইভ শুরু করা হয়েছে। (Auto-Delete: {'Yes' if auto_delete else 'No'})", "success")
+                add_activity(f"'{project}' এর লাইভ শুরু করা হয়েছে।", "success")
                 threading.Thread(target=live_stream_worker, args=(project, stream_key, concat_file, auto_delete), daemon=True).start()
                 return redirect(url_for("live_page"))
 

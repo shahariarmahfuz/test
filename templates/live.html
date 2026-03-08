@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid p-0">
+    {% if msg %}
+    <div class="alert alert-danger shadow-sm" role="alert">
+        <strong>⚠️ নোটিশ:</strong> {{ msg }}
+    </div>
+    {% endif %}
+
+    <h4 class="mb-3 text-danger fw-bold border-bottom pb-2">🔴 বর্তমানে রানিং লাইভ ({{ active_live_streams|length }}/{{ max_streams }}):</h4>
+    <div class="row mb-5">
+        {% if active_live_streams %}
+            {% for p_name, stream_info in active_live_streams.items() %}
+            <div class="col-12 col-md-6 col-lg-4 mb-3">
+                <div class="card border-danger h-100 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title text-danger fw-bold">📺 {{ p_name }}</h5>
+                        <p class="card-text mb-2 text-muted">স্ট্যাটাস: <strong class="text-dark">{{ stream_info.status }}</strong></p>
+                        
+                        <div class="progress mb-3" style="height: 25px; border-radius: 5px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-danger fw-bold fs-6" role="progressbar" style="width: {{ stream_info.progress_pct }}%;" aria-valuenow="{{ stream_info.progress_pct }}" aria-valuemin="0" aria-valuemax="100">
+                                {{ stream_info.progress_pct }}%
+                            </div>
+                        </div>
+                        
+                        <a href="/cancel_live/{{ p_name }}" class="btn btn-danger w-100 fw-bold shadow-sm">লাইভ বন্ধ করুন ✖</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12"><p class="text-muted fs-5">বর্তমানে কোনো লাইভ চলছে না।</p></div>
+        {% endif %}
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-12 col-md-8 col-lg-6">
+            <div class="card p-4 shadow">
+                <h4 class="mb-4 text-primary fw-bold text-center">নতুন লাইভ শুরু করুন</h4>
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-muted">প্রজেক্ট সিলেক্ট করুন:</label>
+                        <select id="project_select" name="project" class="form-select form-select-lg" onchange="updatePlaylist()" required>
+                            <option value="">-- প্রজেক্ট সিলেক্ট করুন --</option>
+                            {% for p in project_files.keys() %}
+                                <option value="{{ p }}">{{ p }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-muted">আপনার প্লেলিস্ট (ইচ্ছা মতো সাজান):</label>
+                        <textarea id="playlist_box" name="playlist_text" class="form-control font-monospace" rows="6" required></textarea>
+                        <small class="text-muted">প্রতিটি ফাইলের নাম আলাদা লাইনে থাকবে।</small>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label fw-bold text-muted">YouTube Stream Key:</label>
+                        <input type="password" name="stream_key" class="form-control form-control-lg" placeholder="xxxx-xxxx-xxxx-xxxx" required>
+                    </div>
+                    
+                    <div class="form-check mb-4 p-3 bg-light border border-danger rounded shadow-sm">
+                        <input class="form-check-input ms-1 mt-2" style="transform: scale(1.5);" type="checkbox" name="auto_delete" value="yes" id="autoDeleteCheck">
+                        <label class="form-check-label fw-bold text-danger ms-3 fs-5" for="autoDeleteCheck">
+                            🗑️ লাইভ শেষ হলে অটোমেটিক প্রজেক্ট ডিলেট করুন
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-danger w-100 fw-bold fs-4 shadow">▶️ Start Live Stream</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const projectData = {{ project_files | tojson | safe }};
+    function updatePlaylist() {
+        const proj = document.getElementById("project_select").value;
+        const textarea = document.getElementById("playlist_box");
+        if (proj && projectData[proj]) {
+            textarea.value = projectData[proj].join("\n");
+        } else {
+            textarea.value = "";
+        }
+    }
+</script>
+{% endblock %}

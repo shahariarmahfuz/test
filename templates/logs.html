@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .terminal-box {
+        background-color: #1e1e1e; color: #00ff00; font-family: 'Courier New', monospace;
+        padding: 15px; border-radius: 8px; height: 300px; overflow-y: scroll; font-size: 13px;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    }
+    .activity-box { max-height: 500px; overflow-y: auto; }
+</style>
+
+<div class="row">
+    <div class="col-12 col-lg-7 mb-4">
+        <h4 class="text-primary fw-bold mb-3 border-bottom pb-2">📺 Real-time Terminal Logs</h4>
+        <div id="live_logs_container"></div>
+        <div id="encode_logs_container"></div>
+        <div id="no_logs_msg" class="alert alert-secondary mt-3" style="display: none;">বর্তমানে ব্যাকগ্রাউন্ডে কোনো কাজ চলছে না।</div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+        <h4 class="text-success fw-bold mb-3 border-bottom pb-2">🕒 System Activity History</h4>
+        <div class="card shadow-sm">
+            <div class="card-body activity-box p-0" id="activity_log_container">
+                </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function updateLogs() {
+        fetch('/api/sys_logs')
+            .then(response => response.json())
+            .then(data => {
+                // অ্যাক্টিভিটি আপডেট
+                let activityHtml = '<ul class="list-group list-group-flush">';
+                if(data.activities.length === 0) activityHtml += '<li class="list-group-item text-muted p-4 text-center">কোনো ইতিহাস নেই।</li>';
+                data.activities.forEach(act => {
+                    let badgeClass = 'bg-info';
+                    if(act.level === 'success') badgeClass = 'bg-success';
+                    else if(act.level === 'warning') badgeClass = 'bg-warning text-dark';
+                    else if(act.level === 'danger') badgeClass = 'bg-danger';
+                    
+                    activityHtml += `<li class="list-group-item py-3">
+                        <span class="badge ${badgeClass} mb-2">${act.level.toUpperCase()}</span><br>
+                        <strong class="text-dark">${act.message}</strong><br>
+                        <small class="text-muted">🕒 ${act.time}</small>
+                    </li>`;
+                });
+                activityHtml += '</ul>';
+                document.getElementById('activity_log_container').innerHTML = activityHtml;
+
+                let hasLogs = false;
+                
+                // লাইভ লগ আপডেট
+                let liveHtml = '';
+                for (const [project, logText] of Object.entries(data.live_logs)) {
+                    hasLogs = true;
+                    liveHtml += `<div class="mb-4">
+                                    <h6 class="text-danger fw-bold mb-2">🔴 Live Stream Log: ${project}</h6>
+                                    <pre class="terminal-box">${logText}</pre>
+                                 </div>`;
+                }
+                document.getElementById('live_logs_container').innerHTML = liveHtml;
+
+                // এনকোড লগ আপডেট
+                let encodeHtml = '';
+                for (const [project, logText] of Object.entries(data.encode_logs)) {
+                    hasLogs = true;
+                    encodeHtml += `<div class="mb-4">
+                                    <h6 class="text-warning text-dark fw-bold mb-2">⚙️ Encoding Log: ${project}</h6>
+                                    <pre class="terminal-box">${logText}</pre>
+                                 </div>`;
+                }
+                document.getElementById('encode_logs_container').innerHTML = encodeHtml;
+
+                document.getElementById('no_logs_msg').style.display = hasLogs ? 'none' : 'block';
+            });
+    }
+
+    setInterval(updateLogs, 2500);
+    updateLogs();
+</script>
+{% endblock %}

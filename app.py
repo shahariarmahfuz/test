@@ -1,5 +1,5 @@
 from flask import Flask, request, redirect, url_for, render_template, jsonify
-import os, threading, time, subprocess, shutil, datetime, sqlite3, queue
+import os, threading, time, subprocess, shutil, datetime, sqlite3, queue, sys
 
 app = Flask(__name__)
 DB_LOCK = threading.Lock()
@@ -90,7 +90,6 @@ def monitor_process(proc, task_id, phase, folder_path, file_prefix=None):
 # ব্যাকগ্রাউন্ড এনকোডিং ওয়ার্কার
 # ==========================================
 def worker():
-    # সিস্টেম রিস্টার্ট হলে ডাটাবেজ থেকে অসম্পূর্ণ কাজগুলো কিউতে যুক্ত করা
     pending_tasks = db_query("SELECT id FROM tasks WHERE type='encode' AND (status LIKE '%ওয়েটিং%' OR status LIKE '%লাইভের কারণে%') ORDER BY id ASC")
     if pending_tasks:
         for pt in pending_tasks: task_queue.put(pt['id'])
@@ -98,7 +97,6 @@ def worker():
     while True:
         task_id = task_queue.get()
         
-        # লাইভ চললে এনকোড ওয়েটিং থাকবে (সার্ভার সেফটির জন্য)
         while len(active_live_streams) > 0:
             db_execute("UPDATE tasks SET status='লাইভের কারণে অপেক্ষায়...' WHERE id=?", (task_id,))
             time.sleep(5)
@@ -125,8 +123,9 @@ def worker():
             add_activity(f"'{project_name}' প্রজেক্টের কাজ শুরু হয়েছে।", "info")
             
             with open(log_file, "w") as log_f:
-                # FIX: gdown error solved by using python3 -m gdown
-                proc1 = subprocess.Popen(f"python3 -m gdown --fuzzy '{link}'", shell=True, cwd=task_download_dir, stderr=log_f)
+                # FIX: ডাইনামিক ভাবে gdown এর অরিজিনাল লোকেশন বের করা হলো
+                gdown_bin = os.path.join(os.path.dirname(sys.executable), "gdown")
+                proc1 = subprocess.Popen(f"'{gdown_bin}' --fuzzy '{link}'", shell=True, cwd=task_download_dir, stderr=log_f)
                 active_processes[task_id] = proc1
                 monitor_process(proc1, task_id, "download", task_download_dir)
             
@@ -175,7 +174,7 @@ def worker():
         task_queue.task_done()
 
 # ==========================================
-# লাইভ স্ট্রিমিং ওয়ার্কার (with Auto-Delete)
+# লাইভ স্ট্রিমিং ওয়ার্কার
 # ==========================================
 def live_stream_worker(project_name, stream_key, concat_file_path, auto_delete=False):
     log_file_path = os.path.abspath(f"projects/{project_name}/live_log.txt")
@@ -202,13 +201,11 @@ def live_stream_worker(project_name, stream_key, concat_file_path, auto_delete=F
         if project_name in active_live_streams: del active_live_streams[project_name]
         if os.path.exists(concat_file_path): os.remove(concat_file_path)
         
-        # অটো-ডিলিট লজিক (লাইভ শেষে)
         if auto_delete:
             shutil.rmtree(f"projects/{project_name}", ignore_errors=True)
             db_execute("DELETE FROM tasks WHERE project=?", (project_name,))
             add_activity(f"লাইভ শেষে '{project_name}' অটোমেটিকভাবে ডিলিট করা হয়েছে 🗑️।", "warning")
 
-# ডেটাবেজ ও ওয়ার্কার ইনিশিয়ালাইজেশন
 init_db()
 threading.Thread(target=worker, daemon=True).start()
 
@@ -277,7 +274,6 @@ def live_page():
                 threading.Thread(target=live_stream_worker, args=(project, stream_key, concat_file, auto_delete), daemon=True).start()
                 return redirect(url_for("live_page"))
 
-    # প্রগ্রেস ক্যালকুলেশন
     for p, info in active_live_streams.items():
         if info.get("total_duration") and info["status"] == "লাইভ চলছে...":
             elapsed = time.time() - info["start_time"]
@@ -301,7 +297,7 @@ def manage_page():
         is_processing = db_query("SELECT id FROM tasks WHERE project=? AND status LIKE '%হচ্ছে%' LIMIT 1", (project,))
         
         if is_live:
-            msg = f"⚠️ '{project}' বর্তমানে লাইভে আছে! এটি এখন ডিলিট বা রিনেম করা যাবে না।"
+            msg = f"⚠️ '{project}' বর্তমানে লাইভে আছে! এটি এখন ডিলিট বা রিনেম করা যাবেবিধা নেই।"
             msg_type = "danger"
         elif is_processing:
             msg = f"⚠️ '{project}' এর কাজ ব্যাকগ্রাউন্ডে চলছে! আগে সেটি শেষ হতে দিন বা বাতিল করুন।"
@@ -362,7 +358,7 @@ def api_sys_logs():
 def view_log(task_id):
     task = db_query("SELECT * FROM tasks WHERE id=?", (task_id,), one=True)
     if not task: return "Task not found"
-    log_content = "লগ ফাইল পাওয়া যায়নি বা মুছে ফেলা হয়েছে।"
+    log_content = "লॉग ফাইল পাওয়া যায়নি বা মুছে ফেলা হয়েছে।"
     if os.path.exists(task['log_file']):
         with open(task['log_file'], 'r') as f: log_content = f.read()
     return render_template("view_log.html", task=task, log_content=log_content)

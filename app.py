@@ -4,7 +4,6 @@ import os, threading, time, subprocess, shutil, datetime, sqlite3, queue, sys
 app = Flask(__name__)
 DB_LOCK = threading.Lock()
 
-# মেমোরি ভেরিয়েবল
 active_processes = {} 
 active_live_streams = {} 
 MAX_LIVE_STREAMS = 3
@@ -123,9 +122,12 @@ def worker():
             add_activity(f"'{project_name}' প্রজেক্টের কাজ শুরু হয়েছে।", "info")
             
             with open(log_file, "w") as log_f:
-                # FIX: ডাইনামিক ভাবে gdown এর অরিজিনাল লোকেশন বের করা হলো
-                gdown_bin = os.path.join(os.path.dirname(sys.executable), "gdown")
-                proc1 = subprocess.Popen(f"'{gdown_bin}' --fuzzy '{link}'", shell=True, cwd=task_download_dir, stderr=log_f)
+                # =======================================================
+                # THE MAGIC FIX: টার্মিনাল বাইপাস করে সরাসরি পাইথন API কল
+                # =======================================================
+                download_script = f"import gdown\ngdown.download('{link}', fuzzy=True)"
+                proc1 = subprocess.Popen([sys.executable, "-c", download_script], cwd=task_download_dir, stdout=log_f, stderr=log_f)
+                
                 active_processes[task_id] = proc1
                 monitor_process(proc1, task_id, "download", task_download_dir)
             
@@ -297,7 +299,7 @@ def manage_page():
         is_processing = db_query("SELECT id FROM tasks WHERE project=? AND status LIKE '%হচ্ছে%' LIMIT 1", (project,))
         
         if is_live:
-            msg = f"⚠️ '{project}' বর্তমানে লাইভে আছে! এটি এখন ডিলিট বা রিনেম করা যাবেবিধা নেই।"
+            msg = f"⚠️ '{project}' বর্তমানে লাইভে আছে! এটি এখন ডিলিট বা রিনেম করা যাবে না।"
             msg_type = "danger"
         elif is_processing:
             msg = f"⚠️ '{project}' এর কাজ ব্যাকগ্রাউন্ডে চলছে! আগে সেটি শেষ হতে দিন বা বাতিল করুন।"
@@ -358,7 +360,7 @@ def api_sys_logs():
 def view_log(task_id):
     task = db_query("SELECT * FROM tasks WHERE id=?", (task_id,), one=True)
     if not task: return "Task not found"
-    log_content = "লॉग ফাইল পাওয়া যায়নি বা মুছে ফেলা হয়েছে।"
+    log_content = "লগ ফাইল পাওয়া যায়নি বা মুছে ফেলা হয়েছে।"
     if os.path.exists(task['log_file']):
         with open(task['log_file'], 'r') as f: log_content = f.read()
     return render_template("view_log.html", task=task, log_content=log_content)

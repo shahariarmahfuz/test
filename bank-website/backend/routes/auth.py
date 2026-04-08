@@ -1,3 +1,4 @@
+import re
 import secrets
 import string
 from flask import Blueprint, request, jsonify
@@ -6,13 +7,11 @@ from models import db, User, Account
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
-_EMAIL_RE_PARTS = (r'^[a-zA-Z0-9._%+\-]+', r'@', r'[a-zA-Z0-9.\-]+', r'\.[a-zA-Z]{2,}$')
-_EMAIL_PATTERN = ''.join(_EMAIL_RE_PARTS)
+_EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 
 
 def _is_valid_email(email: str) -> bool:
-    import re
-    return bool(re.match(_EMAIL_PATTERN, email))
+    return bool(_EMAIL_PATTERN.match(email))
 
 
 def generate_account_number() -> str:

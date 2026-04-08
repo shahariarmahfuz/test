@@ -93,7 +93,7 @@ const Dashboard = () => {
         {/* Welcome banner */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900">
-            Welcome back, {user?.full_name?.split(' ')[0]}!
+            Welcome back, {user?.full_name?.split(' ')[0] || user?.username}!
           </h2>
           <p className="text-gray-500 mt-1">Here's your financial overview.</p>
         </div>

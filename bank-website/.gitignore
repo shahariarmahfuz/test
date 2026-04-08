@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg
+*.egg-info/
+.env
+venv/
+.venv/
+
+# Database files (dev only)
+backend/instance/
+*.db
+
+# Node / Frontend
+frontend/node_modules/
+frontend/build/
+frontend/.env.local
+frontend/.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,4 +1,4 @@
-import random
+import secrets
 import string
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -8,7 +8,7 @@ accounts_bp = Blueprint('accounts', __name__, url_prefix='/api/accounts')
 
 
 def generate_account_number() -> str:
-    digits = ''.join(random.choices(string.digits, k=10))
+    digits = ''.join(secrets.choice(string.digits) for _ in range(10))
     return f'ACC{digits}'
 
 

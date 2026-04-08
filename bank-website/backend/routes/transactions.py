@@ -85,11 +85,11 @@ def deposit():
     if amount is None or not isinstance(amount, (int, float)) or amount <= 0:
         return jsonify({'error': 'Amount must be greater than 0'}), 400
 
-    account = Account.query.filter_by(id=account_id, user_id=user_id, is_active=True).first()
+    account = Account.query.filter_by(id=account_id, user_id=user_id, is_active=True).with_for_update().first()
     if not account:
         return jsonify({'error': 'Account not found'}), 404
 
-    account.balance = round(account.balance + amount, 2)
+    account.balance = round(float(account.balance) + amount, 2)
     tx = Transaction(
         transaction_type='deposit',
         amount=round(amount, 2),
@@ -117,14 +117,14 @@ def withdraw():
     if amount is None or not isinstance(amount, (int, float)) or amount <= 0:
         return jsonify({'error': 'Amount must be greater than 0'}), 400
 
-    account = Account.query.filter_by(id=account_id, user_id=user_id, is_active=True).first()
+    account = Account.query.filter_by(id=account_id, user_id=user_id, is_active=True).with_for_update().first()
     if not account:
         return jsonify({'error': 'Account not found'}), 404
 
-    if account.balance < amount:
+    if float(account.balance) < amount:
         return jsonify({'error': 'Insufficient funds'}), 400
 
-    account.balance = round(account.balance - amount, 2)
+    account.balance = round(float(account.balance) - amount, 2)
     tx = Transaction(
         transaction_type='withdrawal',
         amount=round(amount, 2),
@@ -155,29 +155,27 @@ def transfer():
     if from_account_id == to_account_id:
         return jsonify({'error': 'Cannot transfer to the same account'}), 400
 
-    from_account = Account.query.filter_by(
-        id=from_account_id, user_id=user_id, is_active=True
-    ).first()
-    if not from_account:
+    # Lock both accounts in consistent order (by id) to prevent deadlocks
+    lower_id = min(from_account_id, to_account_id)
+    upper_id = max(from_account_id, to_account_id)
+    locked = {
+        a.id: a
+        for a in Account.query.filter(
+            Account.id.in_([lower_id, upper_id]), Account.is_active.is_(True)
+        ).with_for_update().all()
+    }
+    from_account = locked.get(from_account_id)
+    if not from_account or from_account.user_id != user_id:
         return jsonify({'error': 'Source account not found'}), 404
-
-    # Destination account can belong to any user
-    to_account = Account.query.filter_by(id=to_account_id, is_active=True).first()
-    if not to_account:
-        # Try lookup by account number
-        to_account_number = data.get('to_account_number', '')
-        if to_account_number:
-            to_account = Account.query.filter_by(
-                account_number=to_account_number, is_active=True
-            ).first()
+    to_account = locked.get(to_account_id)
     if not to_account:
         return jsonify({'error': 'Destination account not found'}), 404
 
-    if from_account.balance < amount:
+    if float(from_account.balance) < amount:
         return jsonify({'error': 'Insufficient funds'}), 400
 
-    from_account.balance = round(from_account.balance - amount, 2)
-    to_account.balance = round(to_account.balance + amount, 2)
+    from_account.balance = round(float(from_account.balance) - amount, 2)
+    to_account.balance = round(float(to_account.balance) + amount, 2)
 
     tx = Transaction(
         transaction_type='transfer',

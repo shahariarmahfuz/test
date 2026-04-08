@@ -1,15 +1,22 @@
-import re
+import secrets
+import string
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from models import db, User, Account
-import random
-import string
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
+_EMAIL_RE_PARTS = (r'^[a-zA-Z0-9._%+\-]+', r'@', r'[a-zA-Z0-9.\-]+', r'\.[a-zA-Z]{2,}$')
+_EMAIL_PATTERN = ''.join(_EMAIL_RE_PARTS)
+
+
+def _is_valid_email(email: str) -> bool:
+    import re
+    return bool(re.match(_EMAIL_PATTERN, email))
+
 
 def generate_account_number() -> str:
-    digits = ''.join(random.choices(string.digits, k=10))
+    digits = ''.join(secrets.choice(string.digits) for _ in range(10))
     return f'ACC{digits}'
 
 
@@ -28,7 +35,7 @@ def register():
         return jsonify({'error': 'Username is required'}), 400
     if not email:
         return jsonify({'error': 'Email is required'}), 400
-    if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+    if not _is_valid_email(email):
         return jsonify({'error': 'Invalid email format'}), 400
     if not password or len(password) < 8:
         return jsonify({'error': 'Password must be at least 8 characters'}), 400

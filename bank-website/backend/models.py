@@ -43,7 +43,7 @@ class Account(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     account_number = db.Column(db.String(20), unique=True, nullable=False)
     account_type = db.Column(db.String(20), nullable=False)  # 'checking' or 'savings'
-    balance = db.Column(db.Float, default=0.0, nullable=False)
+    balance = db.Column(db.Numeric(14, 2), default=0.00, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     is_active = db.Column(db.Boolean, default=True)
@@ -66,7 +66,7 @@ class Account(db.Model):
             'id': self.id,
             'account_number': self.account_number,
             'account_type': self.account_type,
-            'balance': self.balance,
+            'balance': float(self.balance),
             'user_id': self.user_id,
             'created_at': self.created_at.isoformat(),
             'is_active': self.is_active,
@@ -78,21 +78,21 @@ class Transaction(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     transaction_type = db.Column(db.String(20), nullable=False)  # 'deposit', 'withdrawal', 'transfer'
-    amount = db.Column(db.Float, nullable=False)
+    amount = db.Column(db.Numeric(14, 2), nullable=False)
     description = db.Column(db.String(255), nullable=True)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     from_account_id = db.Column(db.Integer, db.ForeignKey('accounts.id'), nullable=True)
     to_account_id = db.Column(db.Integer, db.ForeignKey('accounts.id'), nullable=True)
-    balance_after = db.Column(db.Float, nullable=False)
+    balance_after = db.Column(db.Numeric(14, 2), nullable=False)
 
     def to_dict(self) -> dict:
         return {
             'id': self.id,
             'transaction_type': self.transaction_type,
-            'amount': self.amount,
+            'amount': float(self.amount),
             'description': self.description,
             'timestamp': self.timestamp.isoformat(),
             'from_account_id': self.from_account_id,
             'to_account_id': self.to_account_id,
-            'balance_after': self.balance_after,
+            'balance_after': float(self.balance_after),
         }

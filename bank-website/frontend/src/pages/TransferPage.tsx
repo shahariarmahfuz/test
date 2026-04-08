@@ -6,6 +6,8 @@ import { Account } from '../types';
 
 type Step = 'form' | 'review' | 'success';
 
+const STEPS: Step[] = ['form', 'review', 'success'];
+
 const TransferPage = () => {
   const navigate = useNavigate();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -91,18 +93,18 @@ const TransferPage = () => {
         <div className="bg-white rounded-2xl shadow p-8">
           {/* Step indicator */}
           <div className="flex items-center justify-center mb-8">
-            {(['form', 'review', 'success'] as Step[]).map((s, i) => (
+            {STEPS.map((s, i) => (
               <React.Fragment key={s}>
                 <div
                   className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold ${
                     step === s
                       ? 'bg-primary-600 text-white'
-                      : i < (['form', 'review', 'success'] as Step[]).indexOf(step)
+                      : i < STEPS.indexOf(step)
                       ? 'bg-emerald-500 text-white'
                       : 'bg-gray-200 text-gray-500'
                   }`}
                 >
-                  {i < (['form', 'review', 'success'] as Step[]).indexOf(step) ? '✓' : i + 1}
+                  {i < STEPS.indexOf(step) ? '✓' : i + 1}
                 </div>
                 {i < 2 && <div className="flex-1 h-0.5 bg-gray-200 mx-2" />}
               </React.Fragment>
